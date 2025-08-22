@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Modern Notepad</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>📝 My Notepad</h1>
+      <p>Save your thoughts securely in the cloud.</p>
+    </header>
+
+    <main>
+      <textarea id="noteInput" placeholder="Write your note here..." autofocus></textarea>
+      <button id="saveBtn">💾 Save Note</button>
+
+      <div class="notes-list" id="notesList">
+        <!-- Notes will be loaded here -->
+      </div>
+    </main>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script type="module" src="firebase-config.js"></script>
+  <script type="module" src="script.js"></script>
+</body>
+</html>
