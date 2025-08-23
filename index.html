@@ -1,33 +1,322 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Modern Notepad</title>
-  <link rel="stylesheet" href="style.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Glass Notepad</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
 </head>
-<body>
-  <div class="container">
-    <header>
-      <h1>📝 My Notepad</h1>
-      <p>Save your thoughts securely in the cloud.</p>
-    </header>
 
-    <main>
-      <textarea id="noteInput" placeholder="Write your note here..." autofocus></textarea>
-      <button id="saveBtn">💾 Save Note</button>
+<body class="dark">
+    <!-- Mode Toggle -->
+    <button class="mode-toggle" id="modeToggle">◐</button>
 
-      <div class="notes-list" id="notesList">
-        <!-- Notes will be loaded here -->
-      </div>
-    </main>
-  </div>
+    <!-- Smooth Cursor -->
+    <div class="cursor" id="cursor"></div>
 
-  <!-- Firebase SDK -->
-  <script type="module" src="firebase-config.js"></script>
-  <script type="module" src="script.js"></script>
-  <p>LOL</p>
+    <div class="container">
+        <header>
+            <h1>📝 Notepad</h1>
+            <p>Your thoughts, elegantly preserved in glass</p>
+        </header>
+
+        <main>
+            <textarea id="noteInput" placeholder="Start typing your thoughts..."></textarea>
+
+            <div class="btn-container">
+                <span id="charCount">0 characters</span>
+                <button id="saveBtn" aria-label="Save note">💾</button>
+            </div>
+
+            <div class="notes-list" id="notesList">
+                <!-- Notes will appear here -->
+                <div class="note-card">
+                    <p>Welcome to your new notepad! Start typing your thoughts above.</p>
+                    <div class="note-date">Just now</div>
+                    <button class="delete-btn" aria-label="Delete note">×</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast" id="toast">
+        <span id="toastMessage"></span>
+    </div>
+
+    <!-- CEO Line -->
+    <div class="footer-line">
+        "I'm the future CEO, bi*ch!"
+    </div>
+
+    <!-- Main Application Logic -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
+        import { getFirestore, collection, addDoc, serverTimestamp, query, where, orderBy, getDocs, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyBNb-O3r1UgPP4OdFfpoGZzaXeAAYm0vnk",
+            authDomain: "testin01-327fd.firebaseapp.com",
+            projectId: "testin01-327fd",
+            storageBucket: "testin01-327fd.firebasestorage.app",
+            messagingSenderId: "1077308822547",
+            appId: "1:1077308822547:web:7ab494e5a45c798285dbe6",
+            measurementId: "G-P4TY1H0JC1"
+        };
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Wait for DOM to be fully loaded
+        document.addEventListener('DOMContentLoaded', function () {
+            initApp();
+        });
+
+        function initApp() {
+            /* ---------- UI helpers ---------- */
+            const cursor = document.getElementById('cursor');
+            let mouseX = 0, mouseY = 0, cursorX = 0, cursorY = 0;
+            const speed = 0.15;
+
+            function animateCursor() {
+                const dx = mouseX - cursorX;
+                const dy = mouseY - cursorY;
+                cursorX += dx * speed;
+                cursorY += dy * speed;
+                cursor.style.left = cursorX + 'px';
+                cursor.style.top = cursorY + 'px';
+                requestAnimationFrame(animateCursor);
+            }
+
+            document.addEventListener('mousemove', (e) => {
+                mouseX = e.clientX; mouseY = e.clientY;
+            });
+
+            animateCursor();
+
+            const interactiveElements = document.querySelectorAll('button, textarea, .note-card, .mode-toggle');
+
+            interactiveElements.forEach(element => {
+                element.addEventListener('mouseenter', () => cursor.classList.add('hover'));
+                element.addEventListener('mouseleave', () => cursor.classList.remove('hover'));
+                element.addEventListener('mousedown', () => cursor.classList.add('click'));
+                element.addEventListener('mouseup', () => cursor.classList.remove('click'));
+            });
+
+            const noteInput = document.getElementById('noteInput');
+            const charCount = document.getElementById('charCount');
+
+            noteInput.addEventListener('input', () => {
+                const count = noteInput.value.length;
+                charCount.textContent = `${count} characters`;
+                if (count > 1000) charCount.style.color = '#ff6b6b';
+                else charCount.style.color = '';
+            });
+
+            const modeToggle = document.getElementById('modeToggle');
+            modeToggle.addEventListener('click', () => {
+                const isDark = document.body.classList.contains('dark');
+                document.body.classList.toggle('dark');
+                document.body.classList.toggle('light');
+                modeToggle.textContent = isDark ? '◑' : '◐';
+                modeToggle.style.transform = 'scale(0.95)';
+                setTimeout(() => (modeToggle.style.transform = ''), 100);
+                localStorage.setItem('theme', isDark ? 'light' : 'dark');
+            });
+
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'light') {
+                document.body.classList.remove('dark');
+                document.body.classList.add('light');
+                modeToggle.textContent = '◑';
+            }
+
+            function showToast(message) {
+                const toast = document.getElementById('toast');
+                const toastMessage = document.getElementById('toastMessage');
+                toastMessage.textContent = message;
+                toast.classList.add('show');
+                setTimeout(() => toast.classList.remove('show'), 3000);
+            }
+
+            // Simple getUserId() fallback (generates a persistent client id)
+            function getUserId() {
+                let id = localStorage.getItem('userId');
+                if (!id) {
+                    id = 'user_' + Math.random().toString(36).slice(2, 9);
+                    localStorage.setItem('userId', id);
+                }
+                return id;
+            }
+
+            /* ---------- Firestore operations (modular) ---------- */
+
+            // Save note
+            document.getElementById('saveBtn').addEventListener('click', saveNote);
+
+            async function saveNote() {
+                const note = noteInput.value.trim();
+                if (!note) {
+                    showToast("Note cannot be empty!");
+                    return;
+                }
+
+                try {
+                    const notesCol = collection(db, "notes");
+                    await addDoc(notesCol, {
+                        text: note,
+                        timestamp: serverTimestamp(),
+                        userId: getUserId()
+                    });
+
+                    showToast("Note saved successfully!");
+                    noteInput.value = '';
+                    charCount.textContent = '0 characters';
+                    await loadNotes();
+                } catch (error) {
+                    console.error("Error adding note: ", error);
+                    showToast("Error saving note. Please try again.");
+                }
+            }
+
+            // Load notes
+            // Load notes (fixed)
+            async function loadNotes() {
+                const notesList = document.getElementById('notesList');
+                notesList.innerHTML = ''; // Clear current notes
+
+                try {
+                    const refCol = collection(db, "notes");
+                    // optional: order by timestamp newest first
+                    const q = query(refCol, orderBy('timestamp', 'desc'));
+                    const snap = await getDocs(q); // <-- await!
+
+                    if (snap.empty) {
+                        // show a default card if no notes
+                        const welcomeCard = document.createElement('div');
+                        welcomeCard.className = 'note-card';
+                        welcomeCard.innerHTML = `
+        <p>Welcome to your new notepad! Start typing your thoughts above.</p>
+        <div class="note-date">Just now</div>
+        <button class="delete-btn" aria-label="Delete note">×</button>
+      `;
+                        notesList.appendChild(welcomeCard);
+                        addDeleteListener(welcomeCard.querySelector('.delete-btn'));
+                        return;
+                    }
+
+                    snap.forEach(docSnap => {
+                        const data = docSnap.data();
+                        const id = docSnap.id;
+                        const text = data.text || '';
+                        const timestamp = data.timestamp || null;
+                        const noteCard = createNoteCard(id, text, timestamp);
+                        notesList.appendChild(noteCard);
+                    });
+
+                    // Optionally keep #savednote showing last saved note text (or remove it)
+                    const last = snap.docs[0];
+                    if (last) {
+                        document.getElementById("savednote").textContent = last.data().text || 'no note is saved';
+                    } else {
+                        document.getElementById("savednote").textContent = 'no note is saved';
+                    }
+
+                } catch (err) {
+                    console.error("Error loading notes:", err);
+                }
+            }
+
+
+            // Create note card
+            function createNoteCard(id, text, timestamp) {
+                const noteCard = document.createElement('div');
+                noteCard.className = 'note-card';
+                noteCard.setAttribute('data-id', id);
+
+                // timestamp may be undefined or a Firestore Timestamp object
+                let date;
+                if (timestamp && typeof timestamp.toDate === 'function') {
+                    date = timestamp.toDate();
+                } else {
+                    date = new Date();
+                }
+                const formattedDate = formatDate(date);
+
+                noteCard.innerHTML = `
+          <p>${escapeHtml(text).replace(/\n/g, '<br>')}</p>
+          <div class="note-date">${formattedDate}</div>
+          <button class="delete-btn" aria-label="Delete note">×</button>
+        `;
+
+                const deleteBtn = noteCard.querySelector('.delete-btn');
+                deleteBtn.addEventListener('click', () => deleteNote(id, noteCard));
+
+                return noteCard;
+            }
+
+            // Format date for display
+            function formatDate(date) {
+                const now = new Date();
+                const diffTime = Math.abs(now - date);
+                const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                if (diffDays === 0) return 'Today';
+                if (diffDays === 1) return 'Yesterday';
+                if (diffDays < 7) return `${diffDays} days ago`;
+                return date.toLocaleDateString();
+            }
+
+            // Delete note (Firestore)
+            async function deleteNote(id, noteCard) {
+                try {
+                    await deleteDoc(doc(db, "notes", id));
+                    noteCard.style.opacity = '0';
+                    noteCard.style.transform = 'translateY(20px)';
+                    setTimeout(() => {
+                        noteCard.remove();
+                        showToast("Note deleted!");
+                    }, 300);
+                } catch (error) {
+                    console.error("Error removing note: ", error);
+                    showToast("Error deleting note. Please try again.");
+                }
+            }
+
+            // Delete listener for the welcome card (no backend)
+            function addDeleteListener(button) {
+                button.addEventListener('click', function () {
+                    const noteCard = this.parentElement;
+                    noteCard.style.opacity = '0';
+                    noteCard.style.transform = 'translateY(20px)';
+                    setTimeout(() => {
+                        noteCard.remove();
+                        showToast("Note deleted!");
+                    }, 300);
+                });
+            }
+
+            // Basic HTML-escape to avoid accidental injection through notes
+            function escapeHtml(unsafe) {
+                return unsafe
+                    .replaceAll('&', '&amp;')
+                    .replaceAll('<', '&lt;')
+                    .replaceAll('>', '&gt;')
+                    .replaceAll('"', '&quot;')
+                    .replaceAll("'", '&#039;');
+            }
+
+            // Ensure dark mode class exists initially
+            if (!document.body.classList.contains('light')) {
+                document.body.classList.add('dark');
+            }
+
+            // Load notes on start
+            loadNotes();
+        }
+    </script>
 </body>
 
 </html>
-
